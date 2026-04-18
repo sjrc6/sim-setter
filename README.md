@@ -6,7 +6,8 @@ Offset logic copied from [nine-or-null](https://github.com/telperion/nine-or-nul
 
 Download Releases: https://github.com/sjrc6/sim-setter/releases
 
-Slop coded
+You can either download a release executable or run the python scripts directly with the instructions below
+
 
 ## Windows
 
