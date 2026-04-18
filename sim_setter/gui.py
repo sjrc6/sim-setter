@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-import traceback
-
 import wx
 
 from .core import AdjustmentRequest, apply_adjustments, scan_path
@@ -19,7 +16,7 @@ class SimSetterFrame(wx.Frame):
         self.root_entry = wx.TextCtrl(self)
         self.browse_folder_button = wx.Button(self, label="Browse Folder")
         self.browse_file_button = wx.Button(self, label="Browse File")
-        self.scan_button = wx.Button(self, label="Scan")
+        self.scan_button = wx.Button(self, label="Refresh")
         self.backup_checkbox = wx.CheckBox(self, label="Create .oldsync backups")
         self.backup_checkbox.SetValue(True)
 
@@ -27,8 +24,6 @@ class SimSetterFrame(wx.Frame):
         self.plus_button = wx.Button(self, label="Add 9ms")
         self.minus_button = wx.Button(self, label="Remove 9ms")
         self.select_all_button = wx.Button(self, label="Select All")
-        self.refresh_button = wx.Button(self, label="Refresh")
-        self.log = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY)
 
         self._build_layout()
         self._bind_events()
@@ -53,15 +48,12 @@ class SimSetterFrame(wx.Frame):
         action_sizer = wx.BoxSizer(wx.HORIZONTAL)
         action_sizer.Add(self.plus_button, 0, wx.RIGHT, 6)
         action_sizer.Add(self.minus_button, 0, wx.RIGHT, 6)
-        action_sizer.Add(self.select_all_button, 0, wx.RIGHT, 6)
-        action_sizer.Add(self.refresh_button, 0)
+        action_sizer.Add(self.select_all_button, 0)
 
         root_sizer.Add(path_sizer, 0, wx.EXPAND | wx.ALL, 10)
         root_sizer.Add(option_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         root_sizer.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
         root_sizer.Add(action_sizer, 0, wx.ALL, 10)
-        root_sizer.Add(wx.StaticText(self, label="Log"), 0, wx.LEFT | wx.RIGHT, 10)
-        root_sizer.Add(self.log, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         self.SetSizer(root_sizer)
 
@@ -70,7 +62,6 @@ class SimSetterFrame(wx.Frame):
             ("File", 300),
             ("Slot", 230),
             ("OFFSET", 85),
-            ("Own OFFSET", 90),
             ("Split timing", 95),
             ("Title", 180),
             ("Artist", 140),
@@ -85,7 +76,6 @@ class SimSetterFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_apply_plus, self.plus_button)
         self.Bind(wx.EVT_BUTTON, self.on_apply_minus, self.minus_button)
         self.Bind(wx.EVT_BUTTON, self.on_select_all, self.select_all_button)
-        self.Bind(wx.EVT_BUTTON, self.on_scan, self.refresh_button)
 
     def on_browse_folder(self, _event):
         with wx.DirDialog(self, "Choose a simfile folder or pack root") as dialog:
@@ -114,7 +104,7 @@ class SimSetterFrame(wx.Frame):
             self.list.Select(index)
         self.SetStatusText(f"Selected {self.list.GetItemCount()} row(s).")
 
-    def scan(self):
+    def scan(self, status_text: str | None = None):
         root = self.root_entry.GetValue().strip()
         if not root:
             self.message("Choose a file or folder first.")
@@ -123,7 +113,7 @@ class SimSetterFrame(wx.Frame):
         try:
             self.rows = scan_path(root)
         except Exception as exc:
-            self.show_error("Scan failed", exc)
+            self.show_error("Refresh failed", exc)
             return
 
         self.list.DeleteAllItems()
@@ -132,13 +122,11 @@ class SimSetterFrame(wx.Frame):
             index = self.list.InsertItem(row_index, file_label)
             self.list.SetItem(index, 1, row.slot)
             self.list.SetItem(index, 2, f"{row.effective_offset:0.3f}")
-            self.list.SetItem(index, 3, yes_no(row.has_own_offset))
-            self.list.SetItem(index, 4, yes_no(row.has_split_timing))
-            self.list.SetItem(index, 5, row.title)
-            self.list.SetItem(index, 6, row.artist)
+            self.list.SetItem(index, 3, yes_no(row.has_split_timing))
+            self.list.SetItem(index, 4, row.title)
+            self.list.SetItem(index, 5, row.artist)
 
-        self.message(f"Scanned {len(self.rows)} rows.")
-        self.SetStatusText(f"{len(self.rows)} rows found.")
+        self.message(status_text or f"{len(self.rows)} rows found.")
 
     def apply_delta(self, delta_ms: float):
         selected_indices = self.selected_indices()
@@ -174,18 +162,17 @@ class SimSetterFrame(wx.Frame):
             return
 
         changed = 0
+        skipped = 0
         for result in results:
             if result.changed:
                 changed += 1
-                self.message(
-                    f"{result.path} [{result.target}]: "
-                    f"{result.old_offset:0.3f} -> {result.new_offset:0.3f}. {result.message}"
-                )
             else:
-                self.message(f"{result.path} [{result.target}]: {result.message}")
+                skipped += 1
 
-        self.SetStatusText(f"Changed {changed} row(s).")
-        self.scan()
+        status = f"Changed {changed} row(s)."
+        if skipped:
+            status += f" Skipped {skipped} row(s)."
+        self.scan(status)
 
     def selected_indices(self) -> list[int]:
         indices = []
@@ -196,13 +183,11 @@ class SimSetterFrame(wx.Frame):
         return indices
 
     def message(self, text: str):
-        self.log.AppendText(text + "\n")
+        self.SetStatusText(text)
 
     def show_error(self, title: str, exc: Exception):
-        details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-        self.message(details.rstrip())
         wx.MessageBox(str(exc), caption=title, style=wx.OK | wx.ICON_ERROR)
-        self.SetStatusText(title)
+        self.message(f"{title}: {exc}")
 
 
 def yes_no(value: bool) -> str:
