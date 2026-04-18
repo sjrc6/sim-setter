@@ -20,14 +20,13 @@ class SimSetterFrame(wx.Frame):
         self.browse_folder_button = wx.Button(self, label="Browse Folder")
         self.browse_file_button = wx.Button(self, label="Browse File")
         self.scan_button = wx.Button(self, label="Scan")
-        self.show_all_charts = wx.CheckBox(self, label="Show all chart rows")
-        self.show_all_charts.SetValue(True)
         self.backup_checkbox = wx.CheckBox(self, label="Create .oldsync backups")
         self.backup_checkbox.SetValue(True)
 
         self.list = wx.ListCtrl(self, style=wx.LC_REPORT)
-        self.plus_button = wx.Button(self, label="Apply +9 ms")
-        self.minus_button = wx.Button(self, label="Apply -9 ms")
+        self.plus_button = wx.Button(self, label="Add 9ms")
+        self.minus_button = wx.Button(self, label="Remove 9ms")
+        self.select_all_button = wx.Button(self, label="Select All")
         self.refresh_button = wx.Button(self, label="Refresh")
         self.log = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY)
 
@@ -47,7 +46,6 @@ class SimSetterFrame(wx.Frame):
         path_sizer.Add(self.scan_button, 0)
 
         option_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        option_sizer.Add(self.show_all_charts, 0, wx.RIGHT, 18)
         option_sizer.Add(self.backup_checkbox, 0)
 
         self._add_columns()
@@ -55,6 +53,7 @@ class SimSetterFrame(wx.Frame):
         action_sizer = wx.BoxSizer(wx.HORIZONTAL)
         action_sizer.Add(self.plus_button, 0, wx.RIGHT, 6)
         action_sizer.Add(self.minus_button, 0, wx.RIGHT, 6)
+        action_sizer.Add(self.select_all_button, 0, wx.RIGHT, 6)
         action_sizer.Add(self.refresh_button, 0)
 
         root_sizer.Add(path_sizer, 0, wx.EXPAND | wx.ALL, 10)
@@ -85,6 +84,7 @@ class SimSetterFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_scan, self.scan_button)
         self.Bind(wx.EVT_BUTTON, self.on_apply_plus, self.plus_button)
         self.Bind(wx.EVT_BUTTON, self.on_apply_minus, self.minus_button)
+        self.Bind(wx.EVT_BUTTON, self.on_select_all, self.select_all_button)
         self.Bind(wx.EVT_BUTTON, self.on_scan, self.refresh_button)
 
     def on_browse_folder(self, _event):
@@ -109,6 +109,11 @@ class SimSetterFrame(wx.Frame):
     def on_apply_minus(self, _event):
         self.apply_delta(-9.0)
 
+    def on_select_all(self, _event):
+        for index in range(self.list.GetItemCount()):
+            self.list.Select(index)
+        self.SetStatusText(f"Selected {self.list.GetItemCount()} row(s).")
+
     def scan(self):
         root = self.root_entry.GetValue().strip()
         if not root:
@@ -116,7 +121,7 @@ class SimSetterFrame(wx.Frame):
             return
 
         try:
-            self.rows = scan_path(root, include_all_charts=self.show_all_charts.GetValue())
+            self.rows = scan_path(root)
         except Exception as exc:
             self.show_error("Scan failed", exc)
             return

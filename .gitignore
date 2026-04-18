@@ -20,9 +20,6 @@ dist/
 *.egg-info/
 *.spec
 
-# Local backups created by the app
-*.oldsync
-
 # Editor and OS files
 .idea/
 .vscode/

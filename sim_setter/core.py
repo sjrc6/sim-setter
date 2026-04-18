@@ -78,14 +78,14 @@ def choose_simfile(directory: Path, filenames: Iterable[str]) -> Path | None:
     return sm_files[0] if sm_files else None
 
 
-def scan_path(root: str | Path, include_all_charts: bool = True) -> list[SimfileRow]:
+def scan_path(root: str | Path) -> list[SimfileRow]:
     rows: list[SimfileRow] = []
     for path in discover_simfiles(root):
-        rows.extend(scan_simfile(path, include_all_charts=include_all_charts))
+        rows.extend(scan_simfile(path))
     return rows
 
 
-def scan_simfile(path: str | Path, include_all_charts: bool = True) -> list[SimfileRow]:
+def scan_simfile(path: str | Path) -> list[SimfileRow]:
     simfile_path = Path(path).resolve()
     sm = simfile.open(str(simfile_path), strict=False)
     base_offset = parse_offset(sm.offset)
@@ -108,7 +108,7 @@ def scan_simfile(path: str | Path, include_all_charts: bool = True) -> list[Simf
 
     for chart_index, chart in enumerate(sm.charts):
         has_split_timing = chart_has_split_timing(chart)
-        if not include_all_charts and not has_split_timing:
+        if not has_split_timing:
             continue
 
         has_own_offset = "OFFSET" in chart

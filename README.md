@@ -33,4 +33,3 @@ sudo apt install libgtk-3-0 libnotify4 libsm6 libsdl2-2.0-0 libxtst6 freeglut3
 bash build-linux.sh
 ```
 
-
