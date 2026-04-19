@@ -252,6 +252,9 @@ def chart_label(chart, chart_index: int) -> str:
 
 
 def parse_offset(value) -> float:
+    if value is None or value == "":
+        return 0.0
+
     try:
         return float(value)
     except (TypeError, ValueError) as exc:
