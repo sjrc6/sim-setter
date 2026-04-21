@@ -43,6 +43,19 @@ class AdjustmentResult:
     message: str
 
 
+@dataclass(frozen=True)
+class SimfileLoadError:
+    path: Path
+    title: str
+    error: str
+
+
+@dataclass(frozen=True)
+class ScanResult:
+    rows: list[SimfileRow]
+    errors: list[SimfileLoadError]
+
+
 def discover_simfiles(root: str | Path) -> list[Path]:
     root_path = Path(root).expanduser()
     if root_path.is_file():
@@ -78,11 +91,21 @@ def choose_simfile(directory: Path, filenames: Iterable[str]) -> Path | None:
     return sm_files[0] if sm_files else None
 
 
-def scan_path(root: str | Path) -> list[SimfileRow]:
+def scan_path(root: str | Path) -> ScanResult:
     rows: list[SimfileRow] = []
+    errors: list[SimfileLoadError] = []
     for path in discover_simfiles(root):
-        rows.extend(scan_simfile(path))
-    return rows
+        try:
+            rows.extend(scan_simfile(path))
+        except Exception as exc:
+            errors.append(
+                SimfileLoadError(
+                    path=path,
+                    title=error_title(path),
+                    error=format_error(exc),
+                )
+            )
+    return ScanResult(rows=rows, errors=errors)
 
 
 def scan_simfile(path: str | Path) -> list[SimfileRow]:
@@ -267,3 +290,15 @@ def format_offset(value: float) -> str:
 
 def text_value(value) -> str:
     return "" if value is None else str(value)
+
+
+def error_title(path: Path) -> str:
+    parent_name = path.parent.name
+    return parent_name or path.stem or path.name
+
+
+def format_error(exc: Exception) -> str:
+    error_text = str(exc).strip()
+    if error_text:
+        return f"{type(exc).__name__}: {error_text}"
+    return type(exc).__name__

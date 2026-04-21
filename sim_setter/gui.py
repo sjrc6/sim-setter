@@ -13,6 +13,7 @@ class SimSetterFrame(wx.Frame):
             size=(1120, 720),
         )
         self.rows = []
+        self.scan_errors = []
         self.root_entry = wx.TextCtrl(self)
         self.browse_folder_button = wx.Button(self, label="Browse Folder")
         self.browse_file_button = wx.Button(self, label="Browse File")
@@ -21,6 +22,8 @@ class SimSetterFrame(wx.Frame):
         self.backup_checkbox.SetValue(True)
 
         self.list = wx.ListCtrl(self, style=wx.LC_REPORT)
+        self.error_label = wx.StaticText(self, label="Invalid songs")
+        self.error_list = wx.ListCtrl(self, style=wx.LC_REPORT)
         self.plus_button = wx.Button(self, label="Add 9ms")
         self.minus_button = wx.Button(self, label="Remove 9ms")
         self.select_all_button = wx.Button(self, label="Select All")
@@ -44,6 +47,10 @@ class SimSetterFrame(wx.Frame):
         option_sizer.Add(self.backup_checkbox, 0)
 
         self._add_columns()
+        self._add_error_columns()
+        self.error_label.Hide()
+        self.error_list.Hide()
+        self.error_list.SetMinSize((-1, 140))
 
         action_sizer = wx.BoxSizer(wx.HORIZONTAL)
         action_sizer.Add(self.plus_button, 0, wx.RIGHT, 6)
@@ -53,6 +60,8 @@ class SimSetterFrame(wx.Frame):
         root_sizer.Add(path_sizer, 0, wx.EXPAND | wx.ALL, 10)
         root_sizer.Add(option_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         root_sizer.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        root_sizer.Add(self.error_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        root_sizer.Add(self.error_list, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
         root_sizer.Add(action_sizer, 0, wx.ALL, 10)
 
         self.SetSizer(root_sizer)
@@ -69,6 +78,14 @@ class SimSetterFrame(wx.Frame):
         for index, (label, width) in enumerate(columns):
             self.list.InsertColumn(index, label, width=width)
 
+    def _add_error_columns(self):
+        columns = [
+            ("Title", 250),
+            ("Error", 800),
+        ]
+        for index, (label, width) in enumerate(columns):
+            self.error_list.InsertColumn(index, label, width=width)
+
     def _bind_events(self):
         self.Bind(wx.EVT_BUTTON, self.on_browse_folder, self.browse_folder_button)
         self.Bind(wx.EVT_BUTTON, self.on_browse_file, self.browse_file_button)
@@ -76,6 +93,7 @@ class SimSetterFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_apply_plus, self.plus_button)
         self.Bind(wx.EVT_BUTTON, self.on_apply_minus, self.minus_button)
         self.Bind(wx.EVT_BUTTON, self.on_select_all, self.select_all_button)
+        self.error_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_error_row_selected)
 
     def on_browse_folder(self, _event):
         with wx.DirDialog(self, "Choose a simfile folder or pack root") as dialog:
@@ -104,6 +122,9 @@ class SimSetterFrame(wx.Frame):
             self.list.Select(index)
         self.SetStatusText(f"Selected {self.list.GetItemCount()} row(s).")
 
+    def on_error_row_selected(self, event):
+        wx.CallAfter(self.error_list.Select, event.GetIndex(), 0)
+
     def scan(self, status_text: str | None = None):
         root = self.root_entry.GetValue().strip()
         if not root:
@@ -111,10 +132,13 @@ class SimSetterFrame(wx.Frame):
             return
 
         try:
-            self.rows = scan_path(root)
+            result = scan_path(root)
         except Exception as exc:
             self.show_error("Refresh failed", exc)
             return
+
+        self.rows = result.rows
+        self.scan_errors = result.errors
 
         self.list.DeleteAllItems()
         for row_index, row in enumerate(self.rows):
@@ -126,7 +150,12 @@ class SimSetterFrame(wx.Frame):
             self.list.SetItem(index, 4, row.title)
             self.list.SetItem(index, 5, row.artist)
 
-        self.message(status_text or f"{len(self.rows)} rows found.")
+        self.populate_error_list()
+
+        message = status_text or f"{len(self.rows)} rows found."
+        if self.scan_errors:
+            message += f" {len(self.scan_errors)} invalid song(s) skipped."
+        self.message(message)
 
     def apply_delta(self, delta_ms: float):
         selected_indices = self.selected_indices()
@@ -184,6 +213,17 @@ class SimSetterFrame(wx.Frame):
 
     def message(self, text: str):
         self.SetStatusText(text)
+
+    def populate_error_list(self):
+        self.error_list.DeleteAllItems()
+        for row_index, error in enumerate(self.scan_errors):
+            index = self.error_list.InsertItem(row_index, error.title)
+            self.error_list.SetItem(index, 1, error.error)
+
+        show_errors = bool(self.scan_errors)
+        self.error_label.Show(show_errors)
+        self.error_list.Show(show_errors)
+        self.Layout()
 
     def show_error(self, title: str, exc: Exception):
         wx.MessageBox(str(exc), caption=title, style=wx.OK | wx.ICON_ERROR)
